@@ -1,0 +1,32 @@
+version: '3.9'
+
+services:
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: espresso_user
+      POSTGRES_PASSWORD: espresso_pass
+      POSTGRES_DB: espresso
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  app:
+    build: .
+    command: go run main.go
+    environment:
+      DB_HOST: db
+      DB_USER: espresso_user
+      DB_PASSWORD: espresso_pass
+      DB_NAME: espresso
+      DB_PORT: 5432
+    volumes:
+      - .:/app
+    ports:
+      - "8080:8080"
+    depends_on:
+      - db
+
+volumes:
+  pgdata:
