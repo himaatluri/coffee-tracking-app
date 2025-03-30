@@ -7,20 +7,21 @@ import (
 	"os"
 
 	"github.com/gin-gonic/gin"
+	"github.com/himaatluri/coffee-tracking-app/pkg/auth"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
 
 // Model for Espresso Ratio Record
 type EspressoRecord struct {
-	ID               uint    `gorm:"primaryKey"`
-	Coffee           float64 `json:"coffee" binding:"required"`
-	Water            float64 `json:"water" binding:"required"`
-	Ratio            float64 `json:"ratio"`
-	CoffeeBeansBrand string  `json:"coffee_beans_brand"`
-	GrindSize        float64 `json:"grind_size"`
-	TasteNodes       string  `json:"taste_nodes"`
-	Picture          string  `json:"picture"` // Store the picture as a base64 string or URL
+	ID         uint    `gorm:"primaryKey"`
+	Coffee     float64 `json:"coffee" binding:"required"`
+	Water      float64 `json:"water" binding:"required"`
+	Ratio      float64 `json:"ratio"`
+	BeansBrand string  `json:"beans_brand"`
+	GrindSize  float64 `json:"grind_size"`
+	TasteNodes string  `json:"taste_nodes"`
+	Picture    string  `json:"picture"` // Store the picture as a base64 string or URL
 }
 
 var DB *gorm.DB
@@ -44,33 +45,91 @@ func initDatabase() {
 
 func main() {
 	initDatabase()
-	router := gin.Default()
 
-	// Serve static files from the static directory
+	// Initialize auth without JWT secret parameter
+	authHandler := auth.NewAuth(DB)
+	if err := authHandler.Initialize(); err != nil {
+		log.Fatalf("Failed to initialize auth: %v", err)
+	}
+
+	router := gin.Default()
+	router.LoadHTMLGlob("templates/*")
 	router.Static("/static", "./static")
 
-	router.LoadHTMLGlob("templates/*")
+	// Auth routes
+	router.GET("/signup", func(c *gin.Context) {
+		c.HTML(http.StatusOK, "signup.html", nil)
+	})
 
-	router.GET("/", func(c *gin.Context) {
-		var records []EspressoRecord
-		DB.Order("id desc").Limit(3).Find(&records)
-		c.HTML(http.StatusOK, "index.html", gin.H{
-			"records": records,
-			"showAll": false,
+	router.GET("/login", func(c *gin.Context) {
+		registered := c.Query("registered")
+		c.HTML(http.StatusOK, "login.html", gin.H{
+			"registered": registered == "true",
 		})
 	})
 
-	router.GET("/records", func(c *gin.Context) {
-		var records []EspressoRecord
-		DB.Order("id desc").Find(&records)
-		c.HTML(http.StatusOK, "index.html", gin.H{
-			"records": records,
-			"showAll": true,
-		})
+	router.POST("/login", func(c *gin.Context) {
+		var login struct {
+			Email    string `json:"email"`
+			Password string `json:"password"`
+		}
+		if err := c.BindJSON(&login); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		token, err := authHandler.LoginUser(login.Email, login.Password)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"token": token})
 	})
 
-	router.GET("/api/records", getRecords) // JSON API endpoint
-	router.POST("/records", createRecord)
+	router.POST("/register", func(c *gin.Context) {
+		var register struct {
+			Email    string `json:"email"`
+			Password string `json:"password"`
+		}
+		if err := c.BindJSON(&register); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		if err := authHandler.RegisterUser(register.Email, register.Password); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"message": "User registered successfully"})
+	})
+
+	// Protected routes
+	protected := router.Group("/")
+	protected.Use(authHandler.AuthMiddleware())
+	{
+		protected.GET("/", func(c *gin.Context) {
+			var records []EspressoRecord
+			DB.Order("id desc").Limit(3).Find(&records)
+			c.HTML(http.StatusOK, "index.html", gin.H{
+				"records": records,
+				"showAll": false,
+			})
+		})
+
+		protected.GET("/records", func(c *gin.Context) {
+			var records []EspressoRecord
+			DB.Order("id desc").Find(&records)
+			c.HTML(http.StatusOK, "index.html", gin.H{
+				"records": records,
+				"showAll": true,
+			})
+		})
+
+		protected.GET("/api/records", getRecords)
+		protected.POST("/records", createRecord)
+	}
 
 	router.Run(":8080")
 }

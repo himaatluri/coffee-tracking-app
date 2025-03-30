@@ -5,16 +5,32 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>☕</text></svg>">
     <style>
         :root {
-            --primary-color: #6f4e37;
-            --background-color: #faf6f1;
-            --card-color: #ffffff;
-            --text-color: #2c1810;
-            --border-radius: 12px;
-            --transition: all 0.3s ease;
+            --primary-color: #8B4513;
+            --secondary-color: #D2691E;
+            --background-color: #FFFAF5;
+            --card-color: #FFFFFF;
+            --text-color: #2C1810;
+            --border-radius: 16px;
+            --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.04);
+            --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
+            --shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
         }
 
+        /* Optimize performance with GPU acceleration */
         body {
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            transform: translateZ(0);
+            backface-visibility: hidden;
+            perspective: 1000px;
             background-color: var(--background-color);
+            background-image: 
+                linear-gradient(45deg, #FFFAF5 0%, #FFF5EA 100%),
+                radial-gradient(circle at 50% 50%, rgba(139, 69, 19, 0.03) 0%, transparent 100%);
+            background-blend-mode: overlay;
+            background-attachment: fixed;
+            background-size: cover, 15px 15px;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
             margin: 0;
             padding: 20px;
@@ -23,12 +39,16 @@
         }
 
         .container {
-            max-width: 800px;
+            max-width: 1200px;
             margin: 0 auto;
-            background-color: var(--card-color);
-            padding: 2rem;
+            padding: clamp(1rem, 5vw, 3rem);
+            backdrop-filter: blur(10px) saturate(180%);
+            background: rgba(255, 255, 255, 0.85);
+            border: 1px solid rgba(255, 255, 255, 0.2);
             border-radius: var(--border-radius);
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+            box-shadow: 
+                0 4px 6px rgba(0, 0, 0, 0.05),
+                0 10px 20px rgba(139, 69, 19, 0.1);
         }
 
         h1 {
@@ -83,16 +103,19 @@
             font-size: 1rem;
             transition: var(--transition);
             background-color: var(--card-color);
+            backdrop-filter: blur(4px);
         }
 
         input:focus, select:focus {
             outline: none;
             border-color: var(--primary-color);
             box-shadow: 0 0 0 3px rgba(111, 78, 55, 0.1);
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-md);
         }
 
         button {
-            background-color: var(--primary-color);
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
             color: white;
             padding: 1rem 2rem;
             border: none;
@@ -102,6 +125,20 @@
             font-size: 1rem;
             font-weight: 500;
             transition: var(--transition);
+            position: relative;
+            overflow: hidden;
+        }
+
+        button::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(rgba(255, 255, 255, 0.2), transparent);
+            opacity: 0;
+            transition: var(--transition);
         }
 
         button:hover {
@@ -109,30 +146,40 @@
             box-shadow: 0 4px 12px rgba(111, 78, 55, 0.2);
         }
 
+        button:hover::after {
+            opacity: 1;
+        }
+
         .records-container {
             margin-top: 3rem;
         }
 
         .record-card {
-            background-color: var(--card-color);
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(139, 69, 19, 0.1);
             padding: 1.5rem;
             margin-bottom: 1rem;
             border-radius: var(--border-radius);
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
             transition: var(--transition);
             border: 1px solid #eee;
+            animation: fadeIn 0.3s ease-out forwards;
+            will-change: transform, opacity;
         }
 
         .record-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-lg);
         }
 
         .record-card img {
             max-width: 100%;
-            height: auto;
+            height: 300px;
+            object-fit: cover;
             margin-top: 1rem;
             border-radius: calc(var(--border-radius) - 4px);
+            transition: var(--transition);
         }
 
         .ratio-highlight {
@@ -149,6 +196,29 @@
             h1 {
                 font-size: 2rem;
             }
+
+            * {
+                -webkit-tap-highlight-color: transparent;
+            }
+            
+            .record-card {
+                margin-bottom: 1rem;
+            }
+        }
+
+        /* Responsive grid layout */
+        @media (min-width: 768px) {
+            .records-container {
+                display: grid;
+                grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+                gap: 2rem;
+            }
+
+            .form-group {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+                gap: 1.5rem;
+            }
         }
 
         /* Loading animation */
@@ -157,12 +227,74 @@
             to { opacity: 1; transform: translateY(0); }
         }
 
-        .record-card {
-            animation: fadeIn 0.3s ease-out;
+        /* Loading skeleton animation */
+        @keyframes shimmer {
+            0% { background-position: -1000px 0 }
+            100% { background-position: 1000px 0 }
+        }
+
+        .loading {
+            background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+            background-size: 1000px 100%;
+            animation: shimmer 2s infinite linear;
+        }
+
+        /* Coffee drip animation */
+        .coffee-drip {
+            position: fixed;
+            top: 0;
+            right: 5%;
+            width: 30px;
+            height: 100vh;
+            z-index: -1;
+            opacity: 0.8;
+            pointer-events: none;
+        }
+
+        .coffee-stream {
+            stroke-dasharray: 400;
+            stroke-dashoffset: 400;
+            animation: coffee-pour 3s linear infinite;
+        }
+
+        .coffee-drop {
+            animation: coffee-drip 3s linear infinite;
+        }
+
+        @keyframes coffee-pour {
+            0% {
+                stroke-dashoffset: 400;
+            }
+            100% {
+                stroke-dashoffset: -400;
+            }
+        }
+
+        @keyframes coffee-drip {
+            0% {
+                transform: translateY(-380px);
+                opacity: 0;
+            }
+            20% {
+                opacity: 1;
+            }
+            90% {
+                opacity: 1;
+            }
+            100% {
+                transform: translateY(0);
+                opacity: 0;
+            }
         }
     </style>
 </head>
 <body>
+    <div class="coffee-drip">
+        <svg viewBox="0 0 100 400" preserveAspectRatio="none">
+            <path class="coffee-stream" d="M50,0 Q50,200 50,400" stroke="rgba(139, 69, 19, 0.1)" stroke-width="2" fill="none"/>
+            <circle class="coffee-drop" cx="50" cy="20" r="3" fill="rgba(139, 69, 19, 0.2)"/>
+        </svg>
+    </div>
     <div class="container">
         <h1>☕ Coffee Ratio Tracker</h1>
         
@@ -184,8 +316,8 @@
             </div>
 
             <div class="form-group">
-                <label for="coffee_beans_brand">Coffee Beans Brand</label>
-                <input type="text" id="coffee_beans_brand" name="coffee_beans_brand">
+                <label for="beans_brand">Coffee Beans Brand</label>
+                <input type="text" id="beans_brand" name="beans_brand">
             </div>
 
             <div class="form-group">
@@ -238,7 +370,7 @@
 
             const coffee = document.getElementById('coffee').value;
             const water = document.getElementById('water').value;
-            const coffee_beans_brand = document.getElementById('coffee_beans_brand').value;
+            const beans_brand = document.getElementById('beans_brand').value;
             const grind_size = document.getElementById('grind_size').value;
             const taste_nodes = document.getElementById('taste_nodes').value;
             const picture = document.getElementById('picture').files[0]; // Get the selected file
@@ -256,7 +388,7 @@
                     body: JSON.stringify({
                         coffee: parseFloat(coffee),
                         water: parseFloat(water),
-                        coffee_beans_brand: coffee_beans_brand,
+                        beans_brand: beans_brand,
                         grind_size: parseFloat(grind_size),
                         taste_nodes: taste_nodes,
                         picture: base64String // Send the base64 string
@@ -284,7 +416,7 @@
                     body: JSON.stringify({
                         coffee: parseFloat(coffee),
                         water: parseFloat(water),
-                        coffee_beans_brand: coffee_beans_brand,
+                        beans_brand: beans_brand,
                         grind_size: parseFloat(grind_size),
                         taste_nodes: taste_nodes,
                         picture: "" // Send an empty string if no picture
@@ -316,7 +448,7 @@
                             <div><strong>Coffee:</strong> ${record.coffee}g</div>
                             <div><strong>Water:</strong> ${record.water}g</div>
                             <div><strong>Ratio:</strong> <span class="ratio-highlight">1:${record.ratio.toFixed(2)}</span></div>
-                            <div><strong>Beans:</strong> ${record.coffee_beans_brand || 'Not specified'}</div>
+                            <div><strong>Beans:</strong> ${record.beans_brand || 'Not specified'}</div>
                             <div><strong>Grind Size:</strong> ${record.grind_size || 'Not specified'}</div>
                             <div><strong>Taste:</strong> ${record.taste_nodes || 'Not specified'}</div>
                             ${record.picture ? `<img src="${record.picture}" alt="Coffee">` : ''}
