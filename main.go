@@ -13,10 +13,14 @@ import (
 
 // Model for Espresso Ratio Record
 type EspressoRecord struct {
-	ID     uint    `gorm:"primaryKey"`
-	Coffee float64 `json:"coffee" binding:"required"`
-	Water  float64 `json:"water" binding:"required"`
-	Ratio  float64 `json:"ratio"`
+	ID               uint    `gorm:"primaryKey"`
+	Coffee           float64 `json:"coffee" binding:"required"`
+	Water            float64 `json:"water" binding:"required"`
+	Ratio            float64 `json:"ratio"`
+	CoffeeBeansBrand string  `json:"coffee_beans_brand"`
+	GrindSize        float64 `json:"grind_size"`
+	TasteNodes       string  `json:"taste_nodes"`
+	Picture          string  `json:"picture"` // Store the picture as a base64 string or URL
 }
 
 var DB *gorm.DB
@@ -42,12 +46,36 @@ func main() {
 	initDatabase()
 	router := gin.Default()
 
-	router.GET("/records", getRecords)
+	// Serve static files from the static directory
+	router.Static("/static", "./static")
+
+	router.LoadHTMLGlob("templates/*")
+
+	router.GET("/", func(c *gin.Context) {
+		var records []EspressoRecord
+		DB.Order("id desc").Limit(3).Find(&records)
+		c.HTML(http.StatusOK, "index.html", gin.H{
+			"records": records,
+			"showAll": false,
+		})
+	})
+
+	router.GET("/records", func(c *gin.Context) {
+		var records []EspressoRecord
+		DB.Order("id desc").Find(&records)
+		c.HTML(http.StatusOK, "index.html", gin.H{
+			"records": records,
+			"showAll": true,
+		})
+	})
+
+	router.GET("/api/records", getRecords) // JSON API endpoint
 	router.POST("/records", createRecord)
 
 	router.Run(":8080")
 }
 
+// Keep the getRecords function for API calls
 func getRecords(c *gin.Context) {
 	var records []EspressoRecord
 	DB.Find(&records)

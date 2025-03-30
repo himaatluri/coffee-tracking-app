@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Coffee Ratio Tracker</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>☕</text></svg>">
+    <style>
+        :root {
+            --primary-color: #6f4e37;
+            --background-color: #faf6f1;
+            --card-color: #ffffff;
+            --text-color: #2c1810;
+            --border-radius: 12px;
+            --transition: all 0.3s ease;
+        }
+
+        body {
+            background-color: var(--background-color);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            margin: 0;
+            padding: 20px;
+            color: var(--text-color);
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: var(--card-color);
+            padding: 2rem;
+            border-radius: var(--border-radius);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+        }
+
+        h1 {
+            text-align: center;
+            color: var(--text-color);
+            margin-bottom: 2rem;
+            font-weight: 700;
+            font-size: 2.5rem;
+        }
+
+        .nav-links {
+            text-align: center;
+            margin: 2rem 0;
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+        }
+
+        .nav-links a {
+            color: var(--primary-color);
+            text-decoration: none;
+            padding: 0.8rem 1.6rem;
+            border-radius: var(--border-radius);
+            font-weight: 500;
+            background: transparent;
+            border: 2px solid var(--primary-color);
+            transition: var(--transition);
+        }
+
+        .nav-links a:hover {
+            background-color: var(--primary-color);
+            color: white;
+            transform: translateY(-2px);
+        }
+
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            color: var(--text-color);
+        }
+
+        input, select {
+            width: 100%;
+            padding: 0.8rem;
+            border: 2px solid #e0e0e0;
+            border-radius: var(--border-radius);
+            font-size: 1rem;
+            transition: var(--transition);
+            background-color: var(--card-color);
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(111, 78, 55, 0.1);
+        }
+
+        button {
+            background-color: var(--primary-color);
+            color: white;
+            padding: 1rem 2rem;
+            border: none;
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            width: 100%;
+            font-size: 1rem;
+            font-weight: 500;
+            transition: var(--transition);
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(111, 78, 55, 0.2);
+        }
+
+        .records-container {
+            margin-top: 3rem;
+        }
+
+        .record-card {
+            background-color: var(--card-color);
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+            border-radius: var(--border-radius);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+            transition: var(--transition);
+            border: 1px solid #eee;
+        }
+
+        .record-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .record-card img {
+            max-width: 100%;
+            height: auto;
+            margin-top: 1rem;
+            border-radius: calc(var(--border-radius) - 4px);
+        }
+
+        .ratio-highlight {
+            color: var(--primary-color);
+            font-weight: 600;
+            font-size: 1.1em;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
+            
+            h1 {
+                font-size: 2rem;
+            }
+        }
+
+        /* Loading animation */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .record-card {
+            animation: fadeIn 0.3s ease-out;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>☕ Coffee Ratio Tracker</h1>
+        
+        <div class="nav-links">
+            <a href="/">Home</a>
+            <a href="/records">All Records</a>
+        </div>
+
+        {{ if not .showAll }}
+        <form id="espressoForm">
+            <div class="form-group">
+                <label for="coffee">Coffee (grams)</label>
+                <input type="number" id="coffee" name="coffee" required>
+            </div>
+
+            <div class="form-group">
+                <label for="water">Water (grams)</label>
+                <input type="number" id="water" name="water" required>
+            </div>
+
+            <div class="form-group">
+                <label for="coffee_beans_brand">Coffee Beans Brand</label>
+                <input type="text" id="coffee_beans_brand" name="coffee_beans_brand">
+            </div>
+
+            <div class="form-group">
+                <label for="grind_size">Grind Size</label>
+                <input type="number" step="0.1" id="grind_size" name="grind_size">
+            </div>
+
+            <div class="form-group">
+                <label for="taste_nodes">Taste Profile</label>
+                <select id="taste_nodes" name="taste_nodes">
+                    <option value="">Select taste profile...</option>
+                    <option value="Sweet">Sweet</option>
+                    <option value="Sour">Sour</option>
+                    <option value="Bitter">Bitter</option>
+                    <option value="Worst">Worst</option>
+                    <option value="Ok-ok">Ok-ok</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="picture">Picture</label>
+                <input type="file" id="picture" name="picture" accept="image/*">
+            </div>
+
+            <button type="submit">Save Coffee Record</button>
+        </form>
+        {{ end }}
+
+        <div class="records-container">
+            <h2>{{ if .showAll }}All Records{{ else }}Recent Records{{ end }}</h2>
+            {{ range .records }}
+            <div class="record-card">
+                <div><strong>Coffee:</strong> {{ .Coffee }}g</div>
+                <div><strong>Water:</strong> {{ .Water }}g</div>
+                <div><strong>Ratio:</strong> <span class="ratio-highlight">1:{{ printf "%.2f" .Ratio }}</span></div>
+                <div><strong>Beans:</strong> {{ if .CoffeeBeansBrand }}{{ .CoffeeBeansBrand }}{{ else }}Not specified{{ end }}</div>
+                <div><strong>Grind Size:</strong> {{ if .GrindSize }}{{ .GrindSize }}{{ else }}Not specified{{ end }}</div>
+                <div><strong>Taste:</strong> {{ if .TasteNodes }}{{ .TasteNodes }}{{ else }}Not specified{{ end }}</div>
+                {{ if .Picture }}
+                <img src="{{ .Picture }}" alt="Coffee">
+                {{ end }}
+            </div>
+            {{ end }}
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('espressoForm').addEventListener('submit', function(event) {
+            event.preventDefault();
+
+            const coffee = document.getElementById('coffee').value;
+            const water = document.getElementById('water').value;
+            const coffee_beans_brand = document.getElementById('coffee_beans_brand').value;
+            const grind_size = document.getElementById('grind_size').value;
+            const taste_nodes = document.getElementById('taste_nodes').value;
+            const picture = document.getElementById('picture').files[0]; // Get the selected file
+
+            // Convert image to base64
+            const reader = new FileReader();
+            reader.onloadend = function() {
+                const base64String = reader.result;
+
+                fetch('/records', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        coffee: parseFloat(coffee),
+                        water: parseFloat(water),
+                        coffee_beans_brand: coffee_beans_brand,
+                        grind_size: parseFloat(grind_size),
+                        taste_nodes: taste_nodes,
+                        picture: base64String // Send the base64 string
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    window.location.reload();  // Reload the page to show new record
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Error creating record.');
+                });
+            }
+
+            if (picture) {
+                reader.readAsDataURL(picture);
+            } else {
+                // If no picture is selected, still send the data
+                fetch('/records', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        coffee: parseFloat(coffee),
+                        water: parseFloat(water),
+                        coffee_beans_brand: coffee_beans_brand,
+                        grind_size: parseFloat(grind_size),
+                        taste_nodes: taste_nodes,
+                        picture: "" // Send an empty string if no picture
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    window.location.reload();  // Reload the page to show new record
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Error creating record.');
+                });
+            }
+        });
+
+        // Add this new function to display records
+        function loadRecords() {
+            fetch('/records')
+                .then(response => response.json())
+                .then(records => {
+                    const recordsContainer = document.getElementById('records');
+                    recordsContainer.innerHTML = '<h2>Previous Records</h2>';
+                    
+                    records.forEach(record => {
+                        const recordElement = document.createElement('div');
+                        recordElement.className = 'record-card';
+                        recordElement.innerHTML = `
+                            <div><strong>Coffee:</strong> ${record.coffee}g</div>
+                            <div><strong>Water:</strong> ${record.water}g</div>
+                            <div><strong>Ratio:</strong> <span class="ratio-highlight">1:${record.ratio.toFixed(2)}</span></div>
+                            <div><strong>Beans:</strong> ${record.coffee_beans_brand || 'Not specified'}</div>
+                            <div><strong>Grind Size:</strong> ${record.grind_size || 'Not specified'}</div>
+                            <div><strong>Taste:</strong> ${record.taste_nodes || 'Not specified'}</div>
+                            ${record.picture ? `<img src="${record.picture}" alt="Coffee">` : ''}
+                        `;
+                        recordsContainer.appendChild(recordElement);
+                    });
+                })
+                .catch(error => console.error('Error loading records:', error));
+        }
+
+        // Load records when page loads
+        document.addEventListener('DOMContentLoaded', loadRecords);
+    </script>
+</body>
+</html>
