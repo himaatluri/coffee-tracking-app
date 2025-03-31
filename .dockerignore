@@ -1,0 +1,9 @@
+Dockerfile
+docker-compose.yml
+README.md
+.git
+.gitignore
+.gitlab-ci.yml
+.vscode
+.vscode-test
+.vscode-test-*
