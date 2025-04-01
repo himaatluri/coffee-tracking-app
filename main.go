@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/himaatluri/coffee-tracking-app/pkg/auth"
@@ -14,14 +15,18 @@ import (
 
 // Model for Espresso Ratio Record
 type EspressoRecord struct {
-	ID         uint    `gorm:"primaryKey"`
-	Coffee     float64 `json:"coffee" binding:"required"`
-	Water      float64 `json:"water" binding:"required"`
-	Ratio      float64 `json:"ratio"`
-	BeansBrand string  `json:"beans_brand"`
-	GrindSize  float64 `json:"grind_size"`
-	TasteNodes string  `json:"taste_nodes"`
-	Picture    string  `json:"picture"` // Store the picture as a base64 string or URL
+	ID         uint      `gorm:"primaryKey"`
+	UserID     uint      `gorm:"not null" json:"user_id"`
+	User       auth.User `gorm:"foreignKey:UserID" json:"-"`
+	Coffee     float64   `json:"coffee" binding:"required"`
+	Water      float64   `json:"water" binding:"required"`
+	Ratio      float64   `json:"ratio"`
+	BeansBrand string    `json:"beans_brand"`
+	GrindSize  float64   `json:"grind_size"`
+	TasteNodes string    `json:"taste_nodes"`
+	Picture    string    `json:"picture"` // Store the picture as a base64 string or URL
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
 }
 
 var DB *gorm.DB
@@ -40,7 +45,16 @@ func initDatabase() {
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
-	DB.AutoMigrate(&EspressoRecord{})
+
+	// Drop the table if it exists to ensure clean migration
+	DB.Migrator().DropTable(&EspressoRecord{})
+
+	// Run the migration
+	if err := DB.AutoMigrate(&EspressoRecord{}); err != nil {
+		log.Fatalf("Failed to migrate database: %v", err)
+	}
+
+	log.Println("Database migration completed successfully")
 }
 
 func main() {
@@ -68,23 +82,33 @@ func main() {
 		})
 	})
 
+	router.GET("/logout", func(c *gin.Context) {
+		// Clear any server-side session data if needed
+		c.JSON(http.StatusOK, gin.H{"message": "Logged out successfully"})
+	})
+
 	router.POST("/login", func(c *gin.Context) {
 		var login struct {
 			Email    string `json:"email"`
 			Password string `json:"password"`
 		}
 		if err := c.BindJSON(&login); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request format"})
 			return
 		}
 
 		token, err := authHandler.LoginUser(login.Email, login.Password)
 		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid email or password"})
 			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{"token": token})
+		// Set success response with token
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"token":   token,
+			"message": "Login successful",
+		})
 	})
 
 	router.POST("/register", func(c *gin.Context) {
@@ -110,8 +134,9 @@ func main() {
 	protected.Use(authHandler.AuthMiddleware())
 	{
 		protected.GET("/", func(c *gin.Context) {
+			userID := c.GetUint("user_id")
 			var records []EspressoRecord
-			DB.Order("id desc").Limit(3).Find(&records)
+			DB.Where("user_id = ?", userID).Order("id desc").Limit(3).Find(&records)
 			c.HTML(http.StatusOK, "index.html", gin.H{
 				"records": records,
 				"showAll": false,
@@ -119,8 +144,9 @@ func main() {
 		})
 
 		protected.GET("/records", func(c *gin.Context) {
+			userID := c.GetUint("user_id")
 			var records []EspressoRecord
-			DB.Order("id desc").Find(&records)
+			DB.Where("user_id = ?", userID).Order("id desc").Find(&records)
 			c.HTML(http.StatusOK, "index.html", gin.H{
 				"records": records,
 				"showAll": true,
@@ -136,8 +162,17 @@ func main() {
 
 // Keep the getRecords function for API calls
 func getRecords(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+
 	var records []EspressoRecord
-	DB.Find(&records)
+	if err := DB.Where("user_id = ?", userID).Find(&records).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch records"})
+		return
+	}
 	c.JSON(http.StatusOK, records)
 }
 
@@ -147,7 +182,20 @@ func createRecord(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+
+	// Get user ID from context (set by auth middleware)
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+	record.UserID = userID.(uint)
 	record.Ratio = record.Coffee / record.Water
-	DB.Create(&record)
+
+	if err := DB.Create(&record).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create record"})
+		return
+	}
+
 	c.JSON(http.StatusOK, record)
 }

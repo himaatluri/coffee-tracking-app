@@ -299,8 +299,9 @@
         <h1>☕ Coffee Ratio Tracker</h1>
         
         <div class="nav-links">
-            <a href="/">Home</a>
-            <a href="/records">All Records</a>
+            <a href="/?token=${localStorage.getItem('auth_token')}">Home</a>
+            <a href="/records?token=${localStorage.getItem('auth_token')}">All Records</a>
+            <a href="#" onclick="logout()" style="color: #dc3545;">Logout</a>
         </div>
 
         {{ if not .showAll }}
@@ -365,15 +366,106 @@
     </div>
 
     <script>
+        // Add logout function
+        async function logout() {
+            try {
+                // Call the server logout endpoint
+                await fetch('/logout', {
+                    method: 'GET',
+                    headers: getAuthHeaders()
+                });
+                
+                // Clear the auth token
+                localStorage.removeItem('auth_token');
+                
+                // Clear any existing token from URL
+                const url = new URL(window.location.href);
+                url.searchParams.delete('token');
+                window.history.replaceState({}, document.title, url.pathname);
+                
+                // Redirect to login page
+                window.location.href = '/login';
+            } catch (error) {
+                console.error('Error during logout:', error);
+                // Still clear local storage and redirect even if server call fails
+                localStorage.removeItem('auth_token');
+                window.location.href = '/login';
+            }
+        }
+
+        // Add auth token to all fetch requests
+        function getAuthHeaders() {
+            const token = localStorage.getItem('auth_token');
+            return {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            };
+        }
+
+        // Check if user is logged in
+        function checkAuth() {
+            const token = localStorage.getItem('auth_token');
+            if (!token) {
+                window.location.href = '/login';
+                return false;
+            }
+            return true;
+        }
+
+        // Add auth check on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            // Check for token in URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const token = urlParams.get('token');
+            if (token) {
+                localStorage.setItem('auth_token', token);
+                // Remove token from URL
+                window.history.replaceState({}, document.title, window.location.pathname);
+            }
+            
+            if (!checkAuth()) return;
+
+            // Update all navigation links with the current token
+            const token = localStorage.getItem('auth_token');
+            document.querySelectorAll('.nav-links a').forEach(link => {
+                if (link.getAttribute('href') !== '#') {
+                    const url = new URL(link.href);
+                    url.searchParams.set('token', token);
+                    link.href = url.toString();
+                }
+            });
+        });
+
+        // Update all fetch requests to include auth headers
+        const originalFetch = window.fetch;
+        window.fetch = function() {
+            let [resource, config] = arguments;
+            const token = localStorage.getItem('auth_token');
+            
+            if (token) {
+                if (config === undefined) {
+                    config = {};
+                }
+                if (config.headers === undefined) {
+                    config.headers = {};
+                }
+                config.headers['Authorization'] = `Bearer ${token}`;
+            }
+            
+            return originalFetch(resource, config);
+        };
+
         document.getElementById('espressoForm').addEventListener('submit', function(event) {
             event.preventDefault();
+
+            if (!checkAuth()) return;
 
             const coffee = document.getElementById('coffee').value;
             const water = document.getElementById('water').value;
             const beans_brand = document.getElementById('beans_brand').value;
             const grind_size = document.getElementById('grind_size').value;
             const taste_nodes = document.getElementById('taste_nodes').value;
-            const picture = document.getElementById('picture').files[0]; // Get the selected file
+            const picture = document.getElementById('picture').files[0];
 
             // Convert image to base64
             const reader = new FileReader();
@@ -382,21 +474,25 @@
 
                 fetch('/records', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
+                    headers: getAuthHeaders(),
                     body: JSON.stringify({
                         coffee: parseFloat(coffee),
                         water: parseFloat(water),
                         beans_brand: beans_brand,
                         grind_size: parseFloat(grind_size),
                         taste_nodes: taste_nodes,
-                        picture: base64String // Send the base64 string
+                        picture: base64String
                     })
                 })
-                .then(response => response.json())
+                .then(response => {
+                    if (response.status === 401) {
+                        window.location.href = '/login';
+                        throw new Error('Unauthorized');
+                    }
+                    return response.json();
+                })
                 .then(data => {
-                    window.location.reload();  // Reload the page to show new record
+                    window.location.reload();
                 })
                 .catch(error => {
                     console.error('Error:', error);
@@ -407,24 +503,27 @@
             if (picture) {
                 reader.readAsDataURL(picture);
             } else {
-                // If no picture is selected, still send the data
                 fetch('/records', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
+                    headers: getAuthHeaders(),
                     body: JSON.stringify({
                         coffee: parseFloat(coffee),
                         water: parseFloat(water),
                         beans_brand: beans_brand,
                         grind_size: parseFloat(grind_size),
                         taste_nodes: taste_nodes,
-                        picture: "" // Send an empty string if no picture
+                        picture: ""
                     })
                 })
-                .then(response => response.json())
+                .then(response => {
+                    if (response.status === 401) {
+                        window.location.href = '/login';
+                        throw new Error('Unauthorized');
+                    }
+                    return response.json();
+                })
                 .then(data => {
-                    window.location.reload();  // Reload the page to show new record
+                    window.location.reload();
                 })
                 .catch(error => {
                     console.error('Error:', error);
@@ -433,30 +532,40 @@
             }
         });
 
-        // Add this new function to display records
+        // Update loadRecords function to use auth headers
         function loadRecords() {
-            fetch('/records')
-                .then(response => response.json())
-                .then(records => {
-                    const recordsContainer = document.getElementById('records');
-                    recordsContainer.innerHTML = '<h2>Previous Records</h2>';
-                    
-                    records.forEach(record => {
-                        const recordElement = document.createElement('div');
-                        recordElement.className = 'record-card';
-                        recordElement.innerHTML = `
-                            <div><strong>Coffee:</strong> ${record.coffee}g</div>
-                            <div><strong>Water:</strong> ${record.water}g</div>
-                            <div><strong>Ratio:</strong> <span class="ratio-highlight">1:${record.ratio.toFixed(2)}</span></div>
-                            <div><strong>Beans:</strong> ${record.beans_brand || 'Not specified'}</div>
-                            <div><strong>Grind Size:</strong> ${record.grind_size || 'Not specified'}</div>
-                            <div><strong>Taste:</strong> ${record.taste_nodes || 'Not specified'}</div>
-                            ${record.picture ? `<img src="${record.picture}" alt="Coffee">` : ''}
-                        `;
-                        recordsContainer.appendChild(recordElement);
-                    });
-                })
-                .catch(error => console.error('Error loading records:', error));
+            if (!checkAuth()) return;
+
+            fetch('/records', {
+                headers: getAuthHeaders()
+            })
+            .then(response => {
+                if (response.status === 401) {
+                    window.location.href = '/login';
+                    throw new Error('Unauthorized');
+                }
+                return response.json();
+            })
+            .then(records => {
+                const recordsContainer = document.getElementById('records');
+                recordsContainer.innerHTML = '<h2>Previous Records</h2>';
+                
+                records.forEach(record => {
+                    const recordElement = document.createElement('div');
+                    recordElement.className = 'record-card';
+                    recordElement.innerHTML = `
+                        <div><strong>Coffee:</strong> ${record.coffee}g</div>
+                        <div><strong>Water:</strong> ${record.water}g</div>
+                        <div><strong>Ratio:</strong> <span class="ratio-highlight">1:${record.ratio.toFixed(2)}</span></div>
+                        <div><strong>Beans:</strong> ${record.beans_brand || 'Not specified'}</div>
+                        <div><strong>Grind Size:</strong> ${record.grind_size || 'Not specified'}</div>
+                        <div><strong>Taste:</strong> ${record.taste_nodes || 'Not specified'}</div>
+                        ${record.picture ? `<img src="${record.picture}" alt="Coffee">` : ''}
+                    `;
+                    recordsContainer.appendChild(recordElement);
+                });
+            })
+            .catch(error => console.error('Error loading records:', error));
         }
 
         // Load records when page loads

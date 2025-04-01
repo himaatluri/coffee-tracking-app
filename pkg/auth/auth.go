@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"time"
@@ -98,9 +99,29 @@ func (a *Auth) AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		token := c.GetHeader("Authorization")
 		if token == "" {
-			c.Redirect(302, "/login")
-			c.Abort()
-			return
+			// Check for token in query string (for browser redirects)
+			token = c.Query("token")
+			if token == "" {
+				// For HTML requests, redirect to login with return URL
+				if c.GetHeader("Accept") == "text/html" {
+					returnURL := c.Request.URL.Path
+					if c.Request.URL.RawQuery != "" {
+						returnURL += "?" + c.Request.URL.RawQuery
+					}
+					c.Redirect(302, "/login?return="+returnURL)
+					c.Abort()
+					return
+				}
+				// For API requests, return 401
+				c.JSON(http.StatusUnauthorized, gin.H{"error": "No token provided"})
+				c.Abort()
+				return
+			}
+		}
+
+		// Remove "Bearer " prefix if present
+		if len(token) > 7 && token[:7] == "Bearer " {
+			token = token[7:]
 		}
 
 		claims := jwt.MapClaims{}
@@ -109,7 +130,16 @@ func (a *Auth) AuthMiddleware() gin.HandlerFunc {
 		})
 
 		if err != nil {
-			c.Redirect(302, "/login")
+			if c.GetHeader("Accept") == "text/html" {
+				returnURL := c.Request.URL.Path
+				if c.Request.URL.RawQuery != "" {
+					returnURL += "?" + c.Request.URL.RawQuery
+				}
+				c.Redirect(302, "/login?return="+returnURL)
+				c.Abort()
+				return
+			}
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
 			c.Abort()
 			return
 		}

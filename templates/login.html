@@ -160,6 +160,11 @@
             Registration successful! Please log in with your new account.
         </div>
         {{ end }}
+        {{ if .error }}
+        <div class="error-message" style="background: #f8d7da; color: #721c24; padding: 1rem; border-radius: var(--border-radius); margin-bottom: 1rem;">
+            {{ .error }}
+        </div>
+        {{ end }}
         <form id="loginForm">
             <div class="form-group">
                 <label for="email">Email</label>
@@ -194,6 +199,12 @@
             
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
+            const submitButton = event.target.querySelector('button[type="submit"]');
+            const originalButtonText = submitButton.textContent;
+            
+            // Disable button and show loading state
+            submitButton.disabled = true;
+            submitButton.textContent = 'Logging in...';
 
             fetch('/login', {
                 method: 'POST',
@@ -205,19 +216,78 @@
                     password: password
                 })
             })
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(data => {
+                        throw new Error(data.error || 'Login failed');
+                    });
+                }
+                return response.json();
+            })
             .then(data => {
-                if (data.success) {
-                    window.location.href = '/';
+                if (data.token) {
+                    // Store the token in localStorage
+                    localStorage.setItem('auth_token', data.token);
+                    
+                    // Get return URL from query parameters or default to home
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const returnURL = urlParams.get('return') || '/';
+                    
+                    // Redirect to return URL with token
+                    window.location.href = `${returnURL}?token=${data.token}`;
                 } else {
-                    alert('Login failed. Please check your credentials.');
+                    throw new Error('No token received');
                 }
             })
             .catch(error => {
-                console.error('Error:', error);
-                alert('An error occurred during login.');
+                // Show error message
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'error-message';
+                errorDiv.style.cssText = 'background: #f8d7da; color: #721c24; padding: 1rem; border-radius: var(--border-radius); margin-bottom: 1rem;';
+                errorDiv.textContent = error.message || 'An error occurred during login.';
+                
+                // Remove any existing error message
+                const existingError = document.querySelector('.error-message');
+                if (existingError) {
+                    existingError.remove();
+                }
+                
+                // Insert new error message before the form
+                const form = document.getElementById('loginForm');
+                form.parentNode.insertBefore(errorDiv, form);
+            })
+            .finally(() => {
+                // Re-enable button and restore original text
+                submitButton.disabled = false;
+                submitButton.textContent = originalButtonText;
             });
         });
+    </script>
+
+    <script>
+        // Function to add auth token to all fetch requests
+        function addAuthTokenToRequests() {
+            const originalFetch = window.fetch;
+            window.fetch = function() {
+                let [resource, config] = arguments;
+                const token = localStorage.getItem('auth_token');
+                
+                if (token) {
+                    if (config === undefined) {
+                        config = {};
+                    }
+                    if (config.headers === undefined) {
+                        config.headers = {};
+                    }
+                    config.headers['Authorization'] = `Bearer ${token}`;
+                }
+                
+                return originalFetch(resource, config);
+            };
+        }
+
+        // Add auth token to all requests
+        addAuthTokenToRequests();
     </script>
 </body>
 </html>
