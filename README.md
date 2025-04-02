@@ -1,6 +1,6 @@
-# Coffee Ratio Tracker
+# Brew Metrics
 
-A web application for tracking and analyzing coffee brewing ratios, helping coffee enthusiasts perfect their brew.
+A web application for tracking and analyzing coffee brewing metrics, helping coffee enthusiasts perfect their brew.
 
 ## Features
 
