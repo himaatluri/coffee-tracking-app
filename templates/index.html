@@ -575,10 +575,8 @@
                 .then(data => {
                     // Clear form
                     event.target.reset();
-                    // Reload records without full page refresh
-                    loadRecords();
-                    // Update brands list
-                    updateBrandsList();
+                    // Reload the page to show new record
+                    window.location.reload();
                 })
                 .catch(error => {
                     console.error('Error:', error);
@@ -590,125 +588,7 @@
                     submitButton.textContent = originalButtonText;
                 });
             }
-
-            function updateBrandsList() {
-                fetch('/records')
-                .then(response => response.json())
-                .then(records => {
-                    const brandsList = document.getElementById('brands-list');
-                    const brands = new Set(records.map(record => record.beans_brand).filter(Boolean));
-                    brandsList.innerHTML = '';
-                    brands.forEach(brand => {
-                        const option = document.createElement('option');
-                        option.value = brand;
-                        brandsList.appendChild(option);
-                    });
-                })
-                .catch(error => console.error('Error updating brands list:', error));
-            }
         });
-
-        // Load records if we're on the home page or records page
-        if (window.location.pathname === '/' || window.location.pathname === '/records') {
-            loadRecords();
-            updateBrandsList();
-        }
-
-        function loadRecords() {
-            fetch('/records')
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('Failed to load records');
-                }
-                return response.json();
-            })
-            .then(records => {
-                const recordsContainer = document.getElementById('recordsContainer');
-                if (!recordsContainer) return;
-
-                // Keep the header
-                const header = recordsContainer.querySelector('h2');
-                recordsContainer.innerHTML = '';
-                if (header) recordsContainer.appendChild(header);
-                
-                displayRecords(records);
-            })
-            .catch(error => {
-                console.error('Error loading records:', error);
-            });
-        }
-
-        function displayRecords(records) {
-            const container = document.getElementById('recordsContainer');
-            // Don't clear the container here, just append records after the header
-            const recordsGrid = document.createElement('div');
-            recordsGrid.style.display = 'grid';
-            recordsGrid.style.gridTemplateColumns = 'repeat(auto-fill, minmax(300px, 1fr))';
-            recordsGrid.style.gap = '2rem';
-            recordsGrid.style.marginTop = '2rem';
-
-            records.forEach(record => {
-                const card = document.createElement('div');
-                card.className = 'record-card';
-                
-                const date = new Date(record.created_at).toLocaleDateString('en-US', {
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit'
-                });
-
-                card.innerHTML = `
-                    <div class="record-details">
-                        <div class="record-detail-item">
-                            <div class="record-detail-label">Coffee</div>
-                            <div class="record-detail-value">${record.coffee}g</div>
-                        </div>
-                        <div class="record-detail-item">
-                            <div class="record-detail-label">Water</div>
-                            <div class="record-detail-value">${record.water}g</div>
-                        </div>
-                        <div class="record-detail-item">
-                            <div class="record-detail-label">Ratio</div>
-                            <div class="record-detail-value">${record.ratio.toFixed(1)}:1</div>
-                        </div>
-                        <div class="record-detail-item">
-                            <div class="record-detail-label">Grind Size</div>
-                            <div class="record-detail-value">${record.grind_size || 'N/A'}</div>
-                        </div>
-                    </div>
-                    ${record.beans_brand ? `<div class="record-detail-item" style="grid-column: 1 / -1;">
-                        <div class="record-detail-label">Beans</div>
-                        <div class="record-detail-value">${record.beans_brand}</div>
-                    </div>` : ''}
-                    ${record.taste_nodes ? `<div class="record-detail-item" style="grid-column: 1 / -1;">
-                        <div class="record-detail-label">Taste Notes</div>
-                        <div class="record-detail-value">${record.taste_nodes}</div>
-                    </div>` : ''}
-                    <div class="record-image-container">
-                        ${record.picture ? 
-                            `<img class="record-image" src="${record.picture}" alt="Coffee shot" onclick="openModal(this.src)">` :
-                            `<div class="record-image-placeholder">No image</div>`
-                        }
-                    </div>
-                    <div style="text-align: right; margin-top: 0.5rem; color: #666; font-size: 0.9rem;">
-                        ${date}
-                    </div>
-                `;
-                
-                recordsGrid.appendChild(card);
-            });
-
-            // Remove any existing records grid
-            const existingGrid = container.querySelector('div[style*="grid-template-columns"]');
-            if (existingGrid) {
-                existingGrid.remove();
-            }
-
-            // Add the new records grid
-            container.appendChild(recordsGrid);
-        }
 
         // Modal functionality
         const modal = document.getElementById('imageModal');
