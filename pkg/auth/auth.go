@@ -5,8 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -97,55 +99,64 @@ func (a *Auth) LoginUser(email, password string) (string, error) {
 
 func (a *Auth) AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// Skip auth for login, signup, and static files
+		if c.Request.URL.Path == "/login" || c.Request.URL.Path == "/signup" ||
+			strings.HasPrefix(c.Request.URL.Path, "/static") || c.Request.URL.Path == "/logout" {
+			c.Next()
+			return
+		}
+
+		// Get token from Authorization header
 		token := c.GetHeader("Authorization")
 		if token == "" {
-			// Check for token in query string (for browser redirects)
+			// If no token in header, check query string
 			token = c.Query("token")
-			if token == "" {
-				// For HTML requests, redirect to login with return URL
-				if c.GetHeader("Accept") == "text/html" {
-					returnURL := c.Request.URL.Path
-					if c.Request.URL.RawQuery != "" {
-						returnURL += "?" + c.Request.URL.RawQuery
-					}
-					c.Redirect(302, "/login?return="+returnURL)
-					c.Abort()
-					return
-				}
-				// For API requests, return 401
-				c.JSON(http.StatusUnauthorized, gin.H{"error": "No token provided"})
-				c.Abort()
-				return
-			}
 		}
 
-		// Remove "Bearer " prefix if present
-		if len(token) > 7 && token[:7] == "Bearer " {
-			token = token[7:]
-		}
-
-		claims := jwt.MapClaims{}
-		_, err := jwt.ParseWithClaims(token, claims, func(token *jwt.Token) (interface{}, error) {
-			return a.jwtSecret, nil
-		})
-
-		if err != nil {
-			if c.GetHeader("Accept") == "text/html" {
+		if token == "" {
+			// For HTML requests, redirect to login with return URL
+			if strings.HasPrefix(c.GetHeader("Accept"), "text/html") {
 				returnURL := c.Request.URL.Path
 				if c.Request.URL.RawQuery != "" {
 					returnURL += "?" + c.Request.URL.RawQuery
 				}
-				c.Redirect(302, "/login?return="+returnURL)
-				c.Abort()
+				c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("/login?return=%s", url.QueryEscape(returnURL)))
 				return
 			}
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
-			c.Abort()
+			// For API requests, return 401
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "No token provided"})
 			return
 		}
 
-		userID := uint(claims["user_id"].(float64))
+		// Remove "Bearer " prefix if present
+		token = strings.TrimPrefix(token, "Bearer ")
+
+		// Validate token
+		claims, err := a.validateToken(token)
+		if err != nil {
+			// For HTML requests, redirect to login with return URL
+			if strings.HasPrefix(c.GetHeader("Accept"), "text/html") {
+				returnURL := c.Request.URL.Path
+				if c.Request.URL.RawQuery != "" {
+					returnURL += "?" + c.Request.URL.RawQuery
+				}
+				c.Redirect(http.StatusTemporaryRedirect, fmt.Sprintf("/login?return=%s", url.QueryEscape(returnURL)))
+				return
+			}
+			// For API requests, return 401
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
+			return
+		}
+
+		// Set user ID in context
+		userID := uint((*claims)["user_id"].(float64))
 		c.Set("user_id", userID)
+
+		// For HTML requests, ensure token is in context for templates
+		if strings.HasPrefix(c.GetHeader("Accept"), "text/html") {
+			c.Set("auth_token", token)
+		}
+
 		c.Next()
 	}
 }
@@ -186,4 +197,26 @@ func (a *Auth) loadOrGenerateSecret() error {
 
 	a.jwtSecret = secret
 	return nil
+}
+
+func (a *Auth) validateToken(token string) (*jwt.MapClaims, error) {
+	claims := jwt.MapClaims{}
+	_, err := jwt.ParseWithClaims(token, &claims, func(token *jwt.Token) (interface{}, error) {
+		return a.jwtSecret, nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	// Check if token is expired
+	if exp, ok := claims["exp"].(float64); ok {
+		if time.Unix(int64(exp), 0).Before(time.Now()) {
+			return nil, errors.New("token expired")
+		}
+	} else {
+		return nil, errors.New("invalid token expiration")
+	}
+
+	return &claims, nil
 }

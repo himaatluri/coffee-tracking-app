@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -46,11 +47,8 @@ func initDatabase() {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
 
-	// Drop the table if it exists to ensure clean migration
-	DB.Migrator().DropTable(&EspressoRecord{})
-
-	// Run the migration
-	if err := DB.AutoMigrate(&EspressoRecord{}); err != nil {
+	// Run migrations for both User and EspressoRecord
+	if err := DB.AutoMigrate(&auth.User{}, &EspressoRecord{}); err != nil {
 		log.Fatalf("Failed to migrate database: %v", err)
 	}
 
@@ -136,20 +134,38 @@ func main() {
 		protected.GET("/", func(c *gin.Context) {
 			userID := c.GetUint("user_id")
 			var records []EspressoRecord
-			DB.Where("user_id = ?", userID).Order("id desc").Limit(3).Find(&records)
+			if err := DB.Where("user_id = ?", userID).Order("created_at desc").Limit(3).Find(&records).Error; err != nil {
+				log.Printf("Error fetching records: %v", err)
+				c.HTML(http.StatusOK, "index.html", gin.H{
+					"records": []EspressoRecord{},
+					"showAll": false,
+					"token":   c.GetString("auth_token"),
+				})
+				return
+			}
 			c.HTML(http.StatusOK, "index.html", gin.H{
 				"records": records,
 				"showAll": false,
+				"token":   c.GetString("auth_token"),
 			})
 		})
 
 		protected.GET("/records", func(c *gin.Context) {
 			userID := c.GetUint("user_id")
 			var records []EspressoRecord
-			DB.Where("user_id = ?", userID).Order("id desc").Find(&records)
+			if err := DB.Where("user_id = ?", userID).Order("created_at desc").Find(&records).Error; err != nil {
+				log.Printf("Error fetching records: %v", err)
+				c.HTML(http.StatusOK, "index.html", gin.H{
+					"records": []EspressoRecord{},
+					"showAll": true,
+					"token":   c.GetString("auth_token"),
+				})
+				return
+			}
 			c.HTML(http.StatusOK, "index.html", gin.H{
 				"records": records,
 				"showAll": true,
+				"token":   c.GetString("auth_token"),
 			})
 		})
 
@@ -157,19 +173,23 @@ func main() {
 		protected.POST("/records", createRecord)
 	}
 
+	// Add a catch-all route for handling 404s
+	router.NoRoute(func(c *gin.Context) {
+		if strings.HasPrefix(c.GetHeader("Accept"), "text/html") {
+			c.Redirect(http.StatusTemporaryRedirect, "/")
+		} else {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Not found"})
+		}
+	})
+
 	router.Run(":8080")
 }
 
-// Keep the getRecords function for API calls
 func getRecords(c *gin.Context) {
-	userID, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
-		return
-	}
-
+	userID := c.GetUint("user_id")
 	var records []EspressoRecord
-	if err := DB.Where("user_id = ?", userID).Find(&records).Error; err != nil {
+	if err := DB.Where("user_id = ?", userID).Order("created_at desc").Find(&records).Error; err != nil {
+		log.Printf("Error fetching records: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch records"})
 		return
 	}
@@ -184,15 +204,14 @@ func createRecord(c *gin.Context) {
 	}
 
 	// Get user ID from context (set by auth middleware)
-	userID, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
-		return
-	}
-	record.UserID = userID.(uint)
-	record.Ratio = record.Coffee / record.Water
+	userID := c.GetUint("user_id")
+	record.UserID = userID
+	record.Ratio = record.Water / record.Coffee // Fix ratio calculation
+	record.CreatedAt = time.Now()
+	record.UpdatedAt = time.Now()
 
 	if err := DB.Create(&record).Error; err != nil {
+		log.Printf("Error creating record: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create record"})
 		return
 	}

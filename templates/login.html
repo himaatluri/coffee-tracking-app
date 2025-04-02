@@ -97,34 +97,6 @@
             color: white;
         }
 
-        .btn-social {
-            background: white;
-            border: 2px solid #e0e0e0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 0.5rem;
-            margin-bottom: 1rem;
-        }
-
-        .divider {
-            text-align: center;
-            margin: 1.5rem 0;
-            position: relative;
-        }
-
-        .divider::before, .divider::after {
-            content: '';
-            position: absolute;
-            top: 50%;
-            width: 45%;
-            height: 1px;
-            background: #e0e0e0;
-        }
-
-        .divider::before { left: 0; }
-        .divider::after { right: 0; }
-
         .signup-link {
             text-align: center;
             margin-top: 1.5rem;
@@ -177,17 +149,6 @@
             <button type="submit" class="btn btn-primary">Log In</button>
         </form>
 
-        <div class="divider">or</div>
-
-        <button class="btn btn-social">
-            <img src="https://www.google.com/favicon.ico" alt="Google" width="20" height="20">
-            Continue with Google
-        </button>
-        <button class="btn btn-social">
-            <img src="https://github.com/favicon.ico" alt="GitHub" width="20" height="20">
-            Continue with GitHub
-        </button>
-
         <div class="signup-link">
             Don't have an account? <a href="/signup">Sign up</a>
         </div>
@@ -205,6 +166,12 @@
             // Disable button and show loading state
             submitButton.disabled = true;
             submitButton.textContent = 'Logging in...';
+
+            // Clear any existing error messages
+            const existingError = document.querySelector('.error-message');
+            if (existingError) {
+                existingError.remove();
+            }
 
             fetch('/login', {
                 method: 'POST',
@@ -236,7 +203,7 @@
                     // Redirect to return URL with token
                     window.location.href = `${returnURL}?token=${data.token}`;
                 } else {
-                    throw new Error('No token received');
+                    throw new Error('No token received from server');
                 }
             })
             .catch(error => {
@@ -244,13 +211,7 @@
                 const errorDiv = document.createElement('div');
                 errorDiv.className = 'error-message';
                 errorDiv.style.cssText = 'background: #f8d7da; color: #721c24; padding: 1rem; border-radius: var(--border-radius); margin-bottom: 1rem;';
-                errorDiv.textContent = error.message || 'An error occurred during login.';
-                
-                // Remove any existing error message
-                const existingError = document.querySelector('.error-message');
-                if (existingError) {
-                    existingError.remove();
-                }
+                errorDiv.textContent = error.message || 'An error occurred during login. Please try again.';
                 
                 // Insert new error message before the form
                 const form = document.getElementById('loginForm');
@@ -261,6 +222,16 @@
                 submitButton.disabled = false;
                 submitButton.textContent = originalButtonText;
             });
+        });
+
+        // Only redirect if we have a valid token and we're not already on the login page
+        document.addEventListener('DOMContentLoaded', function() {
+            const token = localStorage.getItem('auth_token');
+            if (token && !window.location.pathname.includes('/login')) {
+                const urlParams = new URLSearchParams(window.location.search);
+                const returnURL = urlParams.get('return') || '/';
+                window.location.href = `${returnURL}?token=${token}`;
+            }
         });
     </script>
 
