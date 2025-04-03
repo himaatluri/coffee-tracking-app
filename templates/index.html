@@ -176,7 +176,7 @@
         .record-image-container {
             position: relative;
             width: 100%;
-            padding-top: 75%; /* 4:3 Aspect Ratio */
+            height: 300px; /* Fixed height */
             margin-top: 1rem;
             border-radius: calc(var(--border-radius) - 4px);
             overflow: hidden;
@@ -184,9 +184,6 @@
         }
 
         .record-image {
-            position: absolute;
-            top: 0;
-            left: 0;
             width: 100%;
             height: 100%;
             object-fit: cover;
@@ -492,13 +489,11 @@
                     <div class="record-detail-value">{{ .TasteNodes }}</div>
                 </div>
                 {{ end }}
+                {{ if .Picture }}
                 <div class="record-image-container">
-                    {{ if .Picture }}
-                    <img src="{{ .Picture }}" alt="Coffee shot" class="record-image" onclick="openModal(this.src)">
-                    {{ else }}
-                    <div class="record-image-placeholder">No image</div>
-                    {{ end }}
+                    <img src="data:image/jpeg;base64,{{ .Picture }}" alt="Coffee shot" class="record-image" onclick="openModal(this.src)">
                 </div>
+                {{ end }}
                 <div style="text-align: right; margin-top: 0.5rem; color: #666; font-size: 0.9rem;">
                     {{ .CreatedAt.Format "January 2, 2006 3:04 PM" }}
                 </div>

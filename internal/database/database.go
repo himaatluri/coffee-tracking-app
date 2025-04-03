@@ -29,12 +29,6 @@ func InitDB(cfg *config.Config) error {
 		return fmt.Errorf("failed to connect to database: %v", err)
 	}
 
-	// Drop existing table to apply new schema with default value
-	err = DB.Migrator().DropTable(&models.EspressoRecord{})
-	if err != nil {
-		log.Printf("Warning: Failed to drop existing table: %v", err)
-	}
-
 	// Run migrations
 	err = DB.AutoMigrate(&models.EspressoRecord{})
 	if err != nil {

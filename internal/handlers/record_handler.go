@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/himaatluri/brew-metrics/internal/database"
 	"github.com/himaatluri/brew-metrics/internal/models"
@@ -73,6 +74,25 @@ func CreateRecord(c *gin.Context) {
 	if err := c.ShouldBindJSON(&record); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
+	}
+
+	// Validate and process the picture if present
+	if record.Picture != "" {
+		// Ensure the picture is a valid base64 string
+		if !strings.HasPrefix(record.Picture, "data:image/") {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid image format"})
+			return
+		}
+
+		// Extract the base64 data after the comma
+		parts := strings.Split(record.Picture, ",")
+		if len(parts) != 2 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid image data"})
+			return
+		}
+
+		// Store only the base64 data without the prefix
+		record.Picture = parts[1]
 	}
 
 	// Calculate ratio before saving
