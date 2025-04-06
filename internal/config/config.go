@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"time"
 )
 
 // Config holds application configuration
@@ -9,6 +10,7 @@ type Config struct {
 	Port          string
 	DBConfig      DatabaseConfig
 	MaxUploadSize int64
+	SessionConfig SessionConfig
 }
 
 // DatabaseConfig holds database connection settings
@@ -19,6 +21,15 @@ type DatabaseConfig struct {
 	Password string
 	DBName   string
 	SSLMode  string
+}
+
+// SessionConfig holds session settings
+type SessionConfig struct {
+	SecretKey      string
+	SessionName    string
+	SessionTimeout time.Duration
+	Secure         bool
+	HttpOnly       bool
 }
 
 // DefaultConfig returns the default configuration
@@ -34,6 +45,13 @@ func DefaultConfig() *Config {
 			SSLMode:  getEnvOrDefault("DB_SSL_MODE", "disable"),
 		},
 		MaxUploadSize: 5 << 20, // 5MB
+		SessionConfig: SessionConfig{
+			SecretKey:      getEnvOrDefault("SESSION_SECRET", "default-session-secret"),
+			SessionName:    "coffee_session",
+			SessionTimeout: 24 * time.Hour,
+			Secure:         false, // Set to true in production with HTTPS
+			HttpOnly:       true,
+		},
 	}
 }
 

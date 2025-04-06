@@ -38,3 +38,11 @@ func InitDB(cfg *config.Config) error {
 	log.Println("Database initialized successfully")
 	return nil
 }
+
+// GetDB returns the initialized database connection
+func GetDB() *gorm.DB {
+	if DB == nil {
+		panic("database not initialized - call InitDB first")
+	}
+	return DB
+}

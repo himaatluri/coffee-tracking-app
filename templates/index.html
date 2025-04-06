@@ -623,7 +623,7 @@
                     </div>
                     {{ if .Picture }}
                     <div class="record-image">
-                        <img src="data:image/jpeg;base64,{{ .Picture }}" alt="Coffee Record Image" onclick="openImageModal(this)">
+                        <img src="data:image/jpeg;base64,{{ .Picture }}" alt="Coffee Record Image" onclick="openModal(this.src)">
                     </div>
                     {{ end }}
                 </div>
@@ -717,29 +717,61 @@
     <script>
         // API helper function
         async function apiRequest(url, method, data = null) {
-            const options = {
-                method: method,
-                headers: {
-                    'Accept': 'application/json'
-                }
-            };
+            try {
+                const options = {
+                    method: method,
+                    headers: {
+                        'Accept': 'application/json'
+                    }
+                };
 
-            if (data) {
-                options.headers['Content-Type'] = 'application/json';
-                options.body = JSON.stringify(data);
+                if (data) {
+                    options.headers['Content-Type'] = 'application/json';
+                    options.body = JSON.stringify(data);
+                }
+
+                const response = await fetch(url, options);
+                const contentType = response.headers.get('content-type');
+                
+                if (contentType && contentType.includes('application/json')) {
+                    const jsonData = await response.json();
+                    if (!response.ok) {
+                        throw new Error(jsonData.error || `Failed to ${method.toLowerCase()} record`);
+                    }
+                    return jsonData;
+                } else if (!response.ok) {
+                    throw new Error(`Failed to ${method.toLowerCase()} record`);
+                }
+                return null;
+            } catch (error) {
+                if (error instanceof TypeError) {
+                    throw new Error('Network error. Please check your connection and try again.');
+                }
+                throw error;
             }
+        }
 
-            const response = await fetch(url, options);
-            const contentType = response.headers.get('content-type');
+        // Form validation function
+        function validateForm(formData) {
+            const errors = [];
+            if (formData.coffee <= 0) errors.push('Coffee amount must be greater than 0');
+            if (formData.water <= 0) errors.push('Water amount must be greater than 0');
+            if (!formData.beans_brand.trim()) errors.push('Beans brand is required');
+            if (formData.grind_size < 1 || formData.grind_size > 10) errors.push('Grind size must be between 1 and 10');
+            return errors;
+        }
+
+        // Image validation function
+        function validateImage(file) {
+            if (!file) return null;
+            const maxSize = 5 * 1024 * 1024; // 5MB
+            const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
             
-            if (contentType && contentType.includes('application/json')) {
-                const jsonData = await response.json();
-                if (!response.ok) {
-                    throw new Error(jsonData.error || `Failed to ${method.toLowerCase()} record`);
-                }
-                return jsonData;
-            } else if (!response.ok) {
-                throw new Error(`Failed to ${method.toLowerCase()} record`);
+            if (file.size > maxSize) {
+                return 'Image size must be less than 5MB';
+            }
+            if (!allowedTypes.includes(file.type)) {
+                return 'Only JPEG, PNG, and WebP images are allowed';
             }
             return null;
         }
@@ -765,61 +797,50 @@
         editForm.addEventListener('submit', async function(event) {
             event.preventDefault();
 
-            const recordId = document.getElementById('editRecordId').value;
-            console.log('Updating record:', recordId);
+            const formData = {
+                coffee: parseFloat(document.getElementById('editCoffee').value),
+                water: parseFloat(document.getElementById('editWater').value),
+                beans_brand: document.getElementById('editBeansBrand').value,
+                grind_size: parseFloat(document.getElementById('editGrindSize').value),
+                taste_nodes: document.getElementById('editTasteNodes').value
+            };
 
-            const coffee = document.getElementById('editCoffee').value;
-            const water = document.getElementById('editWater').value;
-            const beans_brand = document.getElementById('editBeansBrand').value;
-            const grind_size = document.getElementById('editGrindSize').value;
-            const taste_nodes = document.getElementById('editTasteNodes').value;
             const picture = document.getElementById('editPicture').files[0];
+            const imageError = validateImage(picture);
+            if (imageError) {
+                showAlert(imageError);
+                return;
+            }
 
-            // Disable submit button and show loading state
+            const validationErrors = validateForm(formData);
+            if (validationErrors.length > 0) {
+                showAlert(validationErrors.join('\n'));
+                return;
+            }
+
             const submitButton = event.target.querySelector('button[type="submit"]');
             const originalButtonText = submitButton.textContent;
             submitButton.disabled = true;
             submitButton.textContent = 'Updating...';
 
             try {
-                const data = {
-                    coffee: parseFloat(coffee),
-                    water: parseFloat(water),
-                    beans_brand: beans_brand,
-                    grind_size: parseFloat(grind_size),
-                    taste_nodes: taste_nodes
-                };
-
                 if (picture) {
-                    const base64 = await new Promise((resolve) => {
+                    const base64 = await new Promise((resolve, reject) => {
                         const reader = new FileReader();
                         reader.onloadend = () => resolve(reader.result);
+                        reader.onerror = () => reject(new Error('Failed to read image file'));
                         reader.readAsDataURL(picture);
                     });
-                    data.picture = base64;
+                    formData.picture = base64;
                 }
 
-                console.log('Sending update request for record:', recordId, 'with data:', data);
-                const response = await fetch(`/records/${recordId}`, {
-                    method: 'PUT',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json'
-                    },
-                    body: JSON.stringify(data)
-                });
-
-                if (!response.ok) {
-                    const errorData = await response.json().catch(() => ({}));
-                    throw new Error(errorData.error || 'Failed to update record');
-                }
-
-                // Close modal and reload page
+                const recordId = document.getElementById('editRecordId').value;
+                await apiRequest(`/records/${recordId}`, 'PUT', formData);
                 editModal.style.display = 'none';
                 window.location.reload();
             } catch (error) {
                 console.error('Error:', error);
-                showAlert(error.message || 'Error updating record. Please try again.');
+                showAlert(error.message);
             } finally {
                 submitButton.disabled = false;
                 submitButton.textContent = originalButtonText;
@@ -830,38 +851,44 @@
         document.getElementById('espressoForm').addEventListener('submit', async function(event) {
             event.preventDefault();
 
-            const coffee = document.getElementById('coffee').value;
-            const water = document.getElementById('water').value;
-            const beans_brand = document.getElementById('beans_brand').value;
-            const grind_size = document.getElementById('grind_size').value;
-            const taste_nodes = document.getElementById('taste_nodes').value;
-            const picture = document.getElementById('picture').files[0];
+            const formData = {
+                coffee: parseFloat(document.getElementById('coffee').value),
+                water: parseFloat(document.getElementById('water').value),
+                beans_brand: document.getElementById('beans_brand').value,
+                grind_size: parseFloat(document.getElementById('grind_size').value),
+                taste_nodes: document.getElementById('taste_nodes').value
+            };
 
-            // Disable submit button and show loading state
+            const picture = document.getElementById('picture').files[0];
+            const imageError = validateImage(picture);
+            if (imageError) {
+                showAlert(imageError);
+                return;
+            }
+
+            const validationErrors = validateForm(formData);
+            if (validationErrors.length > 0) {
+                showAlert(validationErrors.join('\n'));
+                return;
+            }
+
             const submitButton = event.target.querySelector('button[type="submit"]');
             const originalButtonText = submitButton.textContent;
             submitButton.disabled = true;
             submitButton.textContent = 'Saving...';
 
             try {
-                const data = {
-                    coffee: parseFloat(coffee),
-                    water: parseFloat(water),
-                    beans_brand: beans_brand,
-                    grind_size: parseFloat(grind_size),
-                    taste_nodes: taste_nodes
-                };
-
                 if (picture) {
-                    const base64 = await new Promise((resolve) => {
+                    const base64 = await new Promise((resolve, reject) => {
                         const reader = new FileReader();
                         reader.onloadend = () => resolve(reader.result);
+                        reader.onerror = () => reject(new Error('Failed to read image file'));
                         reader.readAsDataURL(picture);
                     });
-                    data.picture = base64;
+                    formData.picture = base64;
                 }
 
-                await apiRequest('/records', 'POST', data);
+                await apiRequest('/records', 'POST', formData);
                 event.target.reset();
                 window.location.reload();
             } catch (error) {
@@ -879,19 +906,40 @@
         const closeBtn = document.querySelector('.modal-close');
 
         function openModal(imgSrc) {
+            if (!imgSrc) {
+                console.error('No image source provided');
+                return;
+            }
             modal.style.display = 'flex';
             modalImg.src = imgSrc;
+            document.body.style.overflow = 'hidden'; // Prevent scrolling when modal is open
         }
 
-        closeBtn.onclick = function() {
+        function closeModal() {
             modal.style.display = 'none';
+            modalImg.src = '';
+            document.body.style.overflow = ''; // Restore scrolling
         }
+
+        closeBtn.onclick = closeModal;
 
         modal.onclick = function(e) {
             if (e.target === modal) {
-                modal.style.display = 'none';
+                closeModal();
             }
         }
+
+        // Handle escape key to close modal
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                if (modal.style.display === 'flex') {
+                    closeModal();
+                }
+                if (editModal.style.display === 'block') {
+                    closeEditModal();
+                }
+            }
+        });
 
         // Edit Modal functionality
         const editModal = document.getElementById('editModal');
